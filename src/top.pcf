@@ -1,0 +1,6 @@
+set_io pins_D1 99
+set_io pins_D2 98
+set_io pins_D3 97
+set_io pins_D4 96
+set_io pins_D5 95
+set_io pins_clk 21

@@ -1,3 +1,4 @@
+""" Main module for synthia application """
 # gtk
 from gi.repository import Gtk, GtkSource, GObject, Pango, GLib
 
@@ -12,20 +13,27 @@ import time
 from myhdl import ConversionError
 
 # synthesis tools
-import synth
+import _conversion
 
 
 UI_PATH = join(abspath(dirname(__file__)), 'ui.glade')
 PCF_PATH = join(abspath(dirname(__file__)), 'top.pcf')
+DEFAULT_TEXT = '''from myhdl import *
+
+def top(pins):
+    # your logic goes here
+
+    return instances()'''
 
 
 class Synthia(object):
+    """ The main application class """
     def __init__(self):
-        self.docPath = None
-        self.messageQ = Queue()
-        t = threading.Thread(target=self.dequeuer)
-        t.daemon = True
-        t.start()
+        self.docpath = None
+        self.message_q = Queue()
+        status_thread = threading.Thread(target=self.dequeuer)
+        status_thread.daemon = True
+        status_thread.start()
         builder = Gtk.Builder()
         GObject.type_register(GtkSource.View)
         builder.add_from_file(UI_PATH)
@@ -34,43 +42,53 @@ class Synthia(object):
         self.statuscontext = self.statusbar.get_context_id("info")
         view = builder.get_object("gtksourceview1")
         handlers = {
-            "on_compile_clicked": self.compile_click,
-            "on_deploy_clicked": self.deploy_click,
-            "on_newBtn_activate": self.newBtn_click,
-            "on_openBtn_activate": self.openBtn_click,
-            "on_saveasBtn_activate" : self.saveasBtn_click,
-            "on_saveBtn_activate" : self.saveBtn_click,
+            "on_compile_clicked": self.compileclicked,
+            "on_deploy_clicked": self.deployclicked,
+            "on_newBtn_activate": self.newbuttonclicked,
+            "on_openBtn_activate": self.openbuttonclicked,
+            "on_saveasBtn_activate" : self.saveasbuttonclicked,
+            "on_saveBtn_activate" : self.savebuttonclicked,
             "quit" : Gtk.main_quit
         }
         builder.connect_signals(handlers)
         lang = GtkSource.LanguageManager.get_default().get_language('python')
-        self.sourceBuffer = GtkSource.Buffer.new_with_language(lang)
+        self.sourcebuffer = GtkSource.Buffer.new_with_language(lang)
         font_desc = Pango.FontDescription('monospace 10')
         if font_desc:
             view.modify_font(font_desc)
-        view.set_buffer(self.sourceBuffer)
-        if (self.window):
+        view.set_buffer(self.sourcebuffer)
+        if self.window:
             self.window.connect("destroy", Gtk.main_quit)
             self.window.set_size_request(600, 650)
 
     def dequeuer(self):
+        """ This periodically checks for messages in the queue
+        and pushes them to the statusbar """
         while True:
-            m = self.messageQ.get(block=True)
-            GLib.idle_add(self.updateStatus, m)
+            message = self.message_q.get(block=True)
+            GLib.idle_add(self.updatestatus, message)
+            # throttle messages to one per second 
             time.sleep(1)
     
-    def updateStatus(self, m):
-        self.statusbar.push(self.statuscontext, m)
+    def updatestatus(self, message):
+        """ pushes message to status bar """
+        self.statusbar.push(self.statuscontext, message)
 
-    def newBtn_click(self, button):
-        self.docPath = None
-        self.sourceBuffer.set_text('from myhdl import *\n\ndef top(pins):\n    \n    return instances()')
+    def newbuttonclicked(self, _):
+        """ resets docpath and sets the text to the default text """
+        self.docpath = None
+        self.sourcebuffer.set_text(DEFAULT_TEXT)
 
-    def openBtn_click(self, button):
-        dialog = Gtk.FileChooserDialog("Please choose a file", self.window,
-                Gtk.FileChooserAction.OPEN,
-                (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-                 Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
+    def openbuttonclicked(self, _):
+        """ Opens a file chooser dialog,
+        sets docpath, and pushes it into the source buffer """
+        dialog = Gtk.FileChooserDialog("Please choose a file",
+                                       self.window,
+                                       Gtk.FileChooserAction.OPEN,
+                                       (Gtk.STOCK_CANCEL,
+                                        Gtk.ResponseType.CANCEL,
+                                        Gtk.STOCK_OPEN,
+                                        Gtk.ResponseType.OK))
 
         filter_py = Gtk.FileFilter()
         filter_py.set_name("Python files")
@@ -79,32 +97,39 @@ class Synthia(object):
 
         response = dialog.run()
         if response == Gtk.ResponseType.OK:
-            self.docPath = dialog.get_filename()
-            with open(self.docPath) as f:
-                self.sourceBuffer.set_text(f.read())
+            self.docpath = dialog.get_filename()
+            with open(self.docpath) as source_file:
+                self.sourcebuffer.set_text(source_file.read())
         dialog.destroy()
 
-    def saveasBtn_click(self, button):
+    def saveasbuttonclicked(self, _):
+        """ opens up file chooser dialog,
+        sets docpath, and saves to disk """
         fname = self.savedialog()
         if fname is None:
             return
-        self.docPath = fname
-        self.saveFile()
+        self.docpath = fname
+        self.savefile()
 
-    def saveBtn_click(self, button):
-        if self.docPath is not None:
-            self.saveFile()
+    def savebuttonclicked(self, _):
+        """ if docpath isn't set, does a saveas,
+        otherwise, just saves the file """
+        if self.docpath is not None:
+            self.savefile()
         else:
-            self.saveAsBtn_click(button)
+            self.saveasbuttonclicked(None)
 
-    def saveFile(self):
-        startiter = self.sourceBuffer.get_start_iter()
-        enditer = self.sourceBuffer.get_end_iter()
-        text = self.sourceBuffer.get_text(startiter,enditer, False)
-        with open(self.docPath, 'w') as f:
-            f.write(text)
+    def savefile(self):
+        """ saves the text in the sourcebuffer to docPath """
+        startiter = self.sourcebuffer.get_start_iter()
+        enditer = self.sourcebuffer.get_end_iter()
+        text = self.sourcebuffer.get_text(startiter, enditer, False)
+        with open(self.docpath, 'w') as destination_file:
+            destination_file.write(text)
 
     def savedialog(self):
+        """ opens a save file chooser
+        returns selected file path or None if canceled """
         dialog = Gtk.FileChooserDialog("Save file as...",
                                        self.window,
                                        Gtk.FileChooserAction.SAVE,
@@ -125,83 +150,83 @@ class Synthia(object):
         dialog.destroy()
         return fname
 
-    def compile_click(self, button):
-        self.saveBtn_click(button)
-        if self.docPath is None:
+    def compileclicked(self, _):
+        """ saves file and kicks off the verification pass """
+        self.savebuttonclicked(None)
+        if self.docpath is None:
             return
-        t = threading.Thread(target=self.check)
-        t.start()
+        compile_thread = threading.Thread(target=self.check)
+        compile_thread.start()
 
-    def deploy_click(self, button):
-        self.saveBtn_click(button)
-        if self.docPath is None:
+    def deployclicked(self, _):
+        """ saves file and kicks off verification, synthesis, and deployment pass """
+        self.savebuttonclicked(None)
+        if self.docpath is None:
             return
-        t = threading.Thread(target=self.deploy)
-        t.start()
+        deploy_thread = threading.Thread(target=self.deploy)
+        deploy_thread.start()
 
     def deploy(self):
-        self.messageQ.put('Analyzing...')
+        """ Calls myHDL, Yoysys, Arachne-pnr, icepack, and iceprog
+        to generate a bitstream and deploy it to the icestick """
+        self.message_q.put('Analyzing...')
         # write the verilog version to /tmp/top.v
-        print('myHDL...')
-        print('***************************************')
-        try:
-            synth.verilogify(self.docPath)
-        except ConversionError as e:
-            dialog = Gtk.MessageDialog(self.window, 0, Gtk.MessageType.ERROR,
-                Gtk.ButtonsType.OK, "MyHDL Error")
-            dialog.format_secondary_text(str(e))
-            dialog.run()
-            dialog.destroy()
-        except synth.NoTopException as e:
-            dialog = Gtk.MessageDialog(self.window, 0, Gtk.MessageType.ERROR,
-                Gtk.ButtonsType.OK, "Synthia Error")
-            dialog.format_secondary_text('Compiled file must have a "top" function')
-            dialog.run()
-            dialog.destroy()
-        self.messageQ.put("Synthesizing...")
-        print('********************************************')
-        print('yosys...')
-        print('********************************************')
+        print 'myHDL...'
+        print '***************************************'
+        self.converttoverilog()
+        self.message_q.put("Synthesizing...")
+        print '********************************************'
+        print 'yosys...'
+        print '********************************************'
         subprocess.call('yosys -q -p "synth_ice40 -blif /tmp/top.blif" /tmp/top.v', shell=True)
-        print('********************************************')
+        print '********************************************'
         
-        self.messageQ.put("Placing and Routing...")
-        print('arachne-pnr...')
-        print('********************************************')
+        self.message_q.put("Placing and Routing...")
+        print 'arachne-pnr...'
+        print '********************************************'
         subprocess.call('arachne-pnr -p ' + PCF_PATH + ' /tmp/top.blif -o /tmp/top.txt', shell=True)
-        print('********************************************')
-        self.messageQ.put("Generating bitfile...")
-        print('icepack...')
-        print('********************************************')
+        print '********************************************'
+        self.message_q.put("Generating bitfile...")
+        print 'icepack...'
+        print '********************************************'
         subprocess.call('icepack /tmp/top.txt /tmp/top.bin', shell=True)
-        print('********************************************')
-        self.messageQ.put("Deploying bitfile...")
-        print('deploy...')
+        print '********************************************'
+        self.message_q.put("Deploying bitfile...")
+        print 'deploy...'
         subprocess.call('iceprog /tmp/top.bin', shell=True)
-        self.messageQ.put("Bitfile deployed")
-        print('deploy complete')
+        self.message_q.put("Bitfile deployed")
+        print 'deploy complete'
 
     def check(self):
-        self.messageQ.put("Verifying...")
-        # write the verilog version to /tmp/top.v
-        print('myHDL...')
-        print('***************************************')
+        """ checks to see if it can convert to verilog and if it has a "top" """
+        self.message_q.put("Verifying...")
+        self.converttoverilog()
+        self.message_q.put("Verify complete")
+
+    def converttoverilog(self):
+        """ runs myHDL verilog conversion """
+        print 'myHDL...'
+        print '***************************************'
         try:
-            synth.verilogify(self.docPath)
-        except ConversionError as e:
-            dialog = Gtk.MessageDialog(self.window, 0, Gtk.MessageType.ERROR,
-                Gtk.ButtonsType.OK, "MyHDL Error")
-            dialog.format_secondary_text(str(e))
+            _conversion.verilogify(self.docpath)
+        except ConversionError as error:
+            dialog = Gtk.MessageDialog(self.window,
+                                       0,
+                                       Gtk.MessageType.ERROR,
+                                       Gtk.ButtonsType.OK,
+                                       "MyHDL Error")
+            dialog.format_secondary_text(str(error))
             dialog.run()
             dialog.destroy()
-        except synth.NoTopException as e:
-            dialog = Gtk.MessageDialog(self.window, 0, Gtk.MessageType.ERROR,
-                Gtk.ButtonsType.OK, "Synthia Error")
+        except _conversion.NoTopException:
+            dialog = Gtk.MessageDialog(self.window,
+                                       0,
+                                       Gtk.MessageType.ERROR,
+                                       Gtk.ButtonsType.OK,
+                                       "Synthia Error")
             dialog.format_secondary_text('Compiled file must have a "top" function')
             dialog.run()
             dialog.destroy()
-        self.messageQ.put("Verify complete")
-        
 
 if __name__ == '__main__':
     gui = Synthia()

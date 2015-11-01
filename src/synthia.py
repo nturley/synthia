@@ -1,10 +1,19 @@
-from gi.repository import Gtk, GtkSource, GObject, Pango
+# gtk
+from gi.repository import Gtk, GtkSource, GObject, Pango, GLib
+
+# standard libs
 from os.path import abspath, dirname, join
-
 import subprocess
+import threading
+from Queue import Queue
+import time
 
-import verilogifier
+# myHDL
 from myhdl import ConversionError
+
+# synthesis tools
+import synth
+
 
 UI_PATH = join(abspath(dirname(__file__)), 'ui.glade')
 PCF_PATH = join(abspath(dirname(__file__)), 'top.pcf')
@@ -13,10 +22,16 @@ PCF_PATH = join(abspath(dirname(__file__)), 'top.pcf')
 class Synthia(object):
     def __init__(self):
         self.docPath = None
+        self.messageQ = Queue()
+        t = threading.Thread(target=self.dequeuer)
+        t.daemon = True
+        t.start()
         builder = Gtk.Builder()
         GObject.type_register(GtkSource.View)
         builder.add_from_file(UI_PATH)
         self.window = builder.get_object("window1")
+        self.statusbar = builder.get_object("statusbar1")
+        self.statuscontext = self.statusbar.get_context_id("info")
         view = builder.get_object("gtksourceview1")
         handlers = {
             "on_compile_clicked": self.compile_click,
@@ -37,6 +52,15 @@ class Synthia(object):
         if (self.window):
             self.window.connect("destroy", Gtk.main_quit)
             self.window.set_size_request(600, 650)
+
+    def dequeuer(self):
+        while True:
+            m = self.messageQ.get(block=True)
+            GLib.idle_add(self.updateStatus, m)
+            time.sleep(1)
+    
+    def updateStatus(self, m):
+        self.statusbar.push(self.statuscontext, m)
 
     def newBtn_click(self, button):
         self.docPath = None
@@ -105,44 +129,79 @@ class Synthia(object):
         self.saveBtn_click(button)
         if self.docPath is None:
             return
+        t = threading.Thread(target=self.check)
+        t.start()
+
+    def deploy_click(self, button):
+        self.saveBtn_click(button)
+        if self.docPath is None:
+            return
+        t = threading.Thread(target=self.deploy)
+        t.start()
+
+    def deploy(self):
+        self.messageQ.put('Analyzing...')
         # write the verilog version to /tmp/top.v
         print('myHDL...')
         print('***************************************')
         try:
-            verilogifier.verilogify(self.docPath)
+            synth.verilogify(self.docPath)
         except ConversionError as e:
             dialog = Gtk.MessageDialog(self.window, 0, Gtk.MessageType.ERROR,
                 Gtk.ButtonsType.OK, "MyHDL Error")
             dialog.format_secondary_text(str(e))
             dialog.run()
             dialog.destroy()
-        except verilogifier.NoTopException as e:
+        except synth.NoTopException as e:
             dialog = Gtk.MessageDialog(self.window, 0, Gtk.MessageType.ERROR,
                 Gtk.ButtonsType.OK, "Synthia Error")
             dialog.format_secondary_text('Compiled file must have a "top" function')
             dialog.run()
             dialog.destroy()
+        self.messageQ.put("Synthesizing...")
         print('********************************************')
         print('yosys...')
         print('********************************************')
-
         subprocess.call('yosys -q -p "synth_ice40 -blif /tmp/top.blif" /tmp/top.v', shell=True)
         print('********************************************')
+        
+        self.messageQ.put("Placing and Routing...")
         print('arachne-pnr...')
         print('********************************************')
         subprocess.call('arachne-pnr -p ' + PCF_PATH + ' /tmp/top.blif -o /tmp/top.txt', shell=True)
         print('********************************************')
+        self.messageQ.put("Generating bitfile...")
         print('icepack...')
         print('********************************************')
-        subprocess.call(['icepack', '/tmp/top.txt', '/tmp/top.bin'])
+        subprocess.call('icepack /tmp/top.txt /tmp/top.bin', shell=True)
         print('********************************************')
-        print('compile complete')
-    def deploy_click(self, button):
-        print('compile...')
-        self.compile_click(button)
+        self.messageQ.put("Deploying bitfile...")
         print('deploy...')
-        subprocess.call(['/usr/local/bin/iceprog', '/home/nturley/synthia/top.bin'])
+        subprocess.call('iceprog /tmp/top.bin', shell=True)
+        self.messageQ.put("Bitfile deployed")
         print('deploy complete')
+
+    def check(self):
+        self.messageQ.put("Verifying...")
+        # write the verilog version to /tmp/top.v
+        print('myHDL...')
+        print('***************************************')
+        try:
+            synth.verilogify(self.docPath)
+        except ConversionError as e:
+            dialog = Gtk.MessageDialog(self.window, 0, Gtk.MessageType.ERROR,
+                Gtk.ButtonsType.OK, "MyHDL Error")
+            dialog.format_secondary_text(str(e))
+            dialog.run()
+            dialog.destroy()
+        except synth.NoTopException as e:
+            dialog = Gtk.MessageDialog(self.window, 0, Gtk.MessageType.ERROR,
+                Gtk.ButtonsType.OK, "Synthia Error")
+            dialog.format_secondary_text('Compiled file must have a "top" function')
+            dialog.run()
+            dialog.destroy()
+        self.messageQ.put("Verify complete")
+        
 
 if __name__ == '__main__':
     gui = Synthia()

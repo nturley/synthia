@@ -3,6 +3,8 @@ A simple IDE that uses myHDL, yosys, and arachne-pnr to target the ICEStick.
 
 Written in python with glade using pygi. Looks a lot like gedit because it uses the same gtk components.
 
+![Screenshot](screenshot.png)
+
 ## Concept
 The goal for synthia is to provide a simple path for playing with reconfigurable logic.
 

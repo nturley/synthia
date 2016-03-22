@@ -1,6 +1,6 @@
 """ Main module for synthia application """
 # gtk
-from gi.repository import Gtk, GtkSource, GObject, Pango, GLib
+from gi.repository import Gtk, GtkSource, GObject, Pango, GLib, Gdk
 
 # standard libs
 from os.path import abspath, dirname, join
@@ -48,6 +48,9 @@ class Synthia(object):
             "on_openBtn_activate": self.openbuttonclicked,
             "on_saveasBtn_activate" : self.saveasbuttonclicked,
             "on_saveBtn_activate" : self.savebuttonclicked,
+            "on_cutBtn_activate" : self.cutbuttonclicked,
+            "on_copyBtn_activate" : self.copybuttonclicked,
+            "on_pasteBtn_activate" : self.pastebuttonclicked,
             "quit" : Gtk.main_quit
         }
         builder.connect_signals(handlers)
@@ -60,6 +63,7 @@ class Synthia(object):
         if self.window:
             self.window.connect("destroy", Gtk.main_quit)
             self.window.set_size_request(600, 650)
+        self.clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
 
     def dequeuer(self):
         """ This periodically checks for messages in the queue
@@ -118,6 +122,15 @@ class Synthia(object):
             self.savefile()
         else:
             self.saveasbuttonclicked(None)
+
+    def cutbuttonclicked(self, _):
+        self.sourcebuffer.cut_clipboard(self.clipboard, True)
+
+    def copybuttonclicked(self, _):
+        self.sourcebuffer.copy_clipboard(self.clipboard)
+
+    def pastebuttonclicked(self, _):
+        self.sourcebuffer.paste_clipboard(self.clipboard, None, True)
 
     def savefile(self):
         """ saves the text in the sourcebuffer to docPath """

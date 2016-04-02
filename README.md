@@ -18,7 +18,10 @@ Another usability barrier is that mainstream HDL's (VHDL and Verilog) are not ve
 
 myHDL is an alternative HDL based on python that is much more readable. Python has a reputation for readability and is widely used in the SW world, so it's syntax is both friendly and familiar.
 
-# On a fresh Lubuntu 15.10.
+## Installation Instructions
+
+### On a fresh Lubuntu 15.10.
+```
 # apt-get some packages :)
 sudo apt-get install git python-pip clang libftdi-dev gawk tcl-dev libreadline-dev bison flex mercurial gir1.2-gtksource-3.0
 
@@ -35,7 +38,7 @@ cd arachne-pnr && make && sudo make install
 cd $HOME
 git clone https://github.com/cliffordwolf/yosys.git yosys
 cd yosys && make && sudo make install
-
+```
 ## Development State
 Basic operation works, but there are still a few pieces that are missing.
 

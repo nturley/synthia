@@ -18,8 +18,26 @@ Another usability barrier is that mainstream HDL's (VHDL and Verilog) are not ve
 
 myHDL is an alternative HDL based on python that is much more readable. Python has a reputation for readability and is widely used in the SW world, so it's syntax is both friendly and familiar.
 
+# On a fresh Lubuntu 15.10.
+# apt-get some packages :)
+sudo apt-get install git python-pip clang libftdi-dev gawk tcl-dev libreadline-dev bison flex mercurial gir1.2-gtksource-3.0
+
+# install icestorm
+cd $HOME
+git clone https://github.com/cliffordwolf/icestorm.git icestorm
+cd icestorm && make && sudo make install
+# arachne-pnr
+cd $HOME
+git clone https://github.com/cseed/arachne-pnr.git arachne-pnr
+cd arachne-pnr && make && sudo make install
+
+# install yosys
+cd $HOME
+git clone https://github.com/cliffordwolf/yosys.git yosys
+cd yosys && make && sudo make install
+
 ## Development State
-Basic operation works. It's unfinished, low quality code, and not packaged in a usable way.
+Basic operation works, but there are still a few pieces that are missing.
 
 ## Done
 
@@ -29,12 +47,9 @@ Basic operation works. It's unfinished, low quality code, and not packaged in a 
 ## TODO
 
 * Sort out the dependencies
-  * Probably try to run this on a blank Ubuntu VM and figure out what I have to download and apt-get to get it running
   * Install this in a virtualenv and see what python packages are missing
   * Write a setup.py
 * Write setup instructions
 * Remove, or add functionality for buttons that currently don't do anything
-* Add reasonable way in the UI to detect whether ICEStick is present
-* Installers
-  * Linux Installer: a setup script?
-  * Windows Installer: build yosys and icestorm toolchain for windows and make an installer (somehow)
+* Add reasonable way in the UI to detect whether iCEStick is present
+* Add the other pins on the iCEstick to the pcf and pin class

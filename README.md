@@ -18,7 +18,7 @@ Another usability barrier is that mainstream HDL's (VHDL and Verilog) are not ve
 
 myHDL is an alternative HDL based on python that is much more readable. Python has a reputation for readability and is widely used in the SW world, so it's syntax is both friendly and familiar.
 
-## Installation Instructions
+## Installing Dependencies
 
 ### On a fresh Lubuntu 15.10.
 ```

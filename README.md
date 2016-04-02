@@ -21,7 +21,7 @@ myHDL is an alternative HDL based on python that is much more readable. Python h
 ## Installing Dependencies
 
 ### On a fresh Lubuntu 15.10.
-```
+``` bash
 # apt-get some packages :)
 sudo apt-get install git python-pip clang libftdi-dev gawk tcl-dev libreadline-dev bison flex mercurial gir1.2-gtksource-3.0
 

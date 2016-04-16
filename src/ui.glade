@@ -173,6 +173,26 @@
             <property name="visible">True</property>
             <property name="can_focus">False</property>
             <child>
+              <object class="GtkToolButton" id="open">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">open</property>
+                <property name="use_underline">True</property>
+                <property name="stock_id">gtk-open</property>
+                <signal name="clicked" handler="on_openBtn_activate" swapped="no"/>
+              </object>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="save">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">save</property>
+                <property name="use_underline">True</property>
+                <property name="stock_id">gtk-save</property>
+                <signal name="clicked" handler="on_saveBtn_activate" swapped="no"/>
+              </object>
+            </child>
+            <child>
               <object class="GtkToolButton" id="compile">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>

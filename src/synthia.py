@@ -5,9 +5,7 @@ from gi.repository import Gtk, GtkSource, GObject, Pango, GLib, Gdk
 # standard libs
 from os.path import abspath, dirname, join
 import subprocess
-import threading
-from Queue import Queue
-import time
+import Queue
 
 # myHDL
 from myhdl import ConversionError
@@ -30,10 +28,9 @@ class Synthia(object):
     """ The main application class """
     def __init__(self):
         self.docpath = None
-        self.message_q = Queue()
-        status_thread = threading.Thread(target=self.dequeuer)
-        status_thread.daemon = True
-        status_thread.start()
+        self.message_q = Queue.Queue()
+        GLib.idle_add(self.on_idle)
+
         builder = Gtk.Builder()
         GObject.type_register(GtkSource.View)
         builder.add_from_file(UI_PATH)
@@ -65,18 +62,15 @@ class Synthia(object):
             self.window.set_size_request(600, 650)
         self.clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
 
-    def dequeuer(self):
-        """ This periodically checks for messages in the queue
-        and pushes them to the statusbar """
-        while True:
-            message = self.message_q.get(block=True)
-            GLib.idle_add(self.updatestatus, message)
-            # throttle messages to one per second 
-            time.sleep(1)
-    
-    def updatestatus(self, message):
-        """ pushes message to status bar """
-        self.statusbar.push(self.statuscontext, message)
+    def on_idle(self):
+        """Check for new messages and update the status bar."""
+        try:
+            message = self.message_q.get(block=False)
+            self.statusbar.push(self.statuscontext, message)
+        except Queue.Empty:
+            pass
+
+        return True
 
     def newbuttonclicked(self, _):
         """ resets docpath and sets the text to the default text """
@@ -168,16 +162,14 @@ class Synthia(object):
         self.savebuttonclicked(None)
         if self.docpath is None:
             return
-        compile_thread = threading.Thread(target=self.check)
-        compile_thread.start()
+        self.check()
 
     def deployclicked(self, _):
         """ saves file and kicks off verification, synthesis, and deployment pass """
         self.savebuttonclicked(None)
         if self.docpath is None:
             return
-        deploy_thread = threading.Thread(target=self.deploy)
-        deploy_thread.start()
+        self.deploy()
 
     def deploy(self):
         """ Calls myHDL, Yoysys, Arachne-pnr, icepack, and iceprog
@@ -186,7 +178,10 @@ class Synthia(object):
         # write the verilog version to /tmp/top.v
         print 'myHDL...'
         print '***************************************'
-        self.converttoverilog()
+        if not self.converttoverilog():
+            self.message_q.put('Verify failed!  Deployment aborted.')
+            return
+
         self.message_q.put("Synthesizing...")
         print '********************************************'
         print 'yosys...'
@@ -213,8 +208,10 @@ class Synthia(object):
     def check(self):
         """ checks to see if it can convert to verilog and if it has a "top" """
         self.message_q.put("Verifying...")
-        self.converttoverilog()
-        self.message_q.put("Verify complete")
+        if self.converttoverilog():
+            self.message_q.put("Verify complete")
+        else:
+            self.message_q.put("Verify failed!")
 
     def converttoverilog(self):
         """ runs myHDL verilog conversion """
@@ -231,6 +228,7 @@ class Synthia(object):
             dialog.format_secondary_text(str(error))
             dialog.run()
             dialog.destroy()
+            return False
         except _conversion.NoTopException:
             dialog = Gtk.MessageDialog(self.window,
                                        0,
@@ -240,6 +238,9 @@ class Synthia(object):
             dialog.format_secondary_text('Compiled file must have a "top" function')
             dialog.run()
             dialog.destroy()
+            return False
+
+        return True
 
 if __name__ == '__main__':
     gui = Synthia()

@@ -214,6 +214,17 @@ class Synthia(object):
         else:
             self.message_q.put("Verify failed!")
 
+    def show_error(self, primary, secondary=None):
+        dialog = Gtk.MessageDialog(self.window,
+                                   0,
+                                   Gtk.MessageType.ERROR,
+                                   Gtk.ButtonsType.OK,
+                                   primary)
+        if secondary is not None:
+            dialog.format_secondary_text(secondary)
+        dialog.run()
+        dialog.destroy()
+
     def converttoverilog(self):
         """ runs myHDL verilog conversion """
         print 'myHDL...'
@@ -221,33 +232,13 @@ class Synthia(object):
         try:
             _conversion.verilogify(self.docpath)
         except ConversionError as error:
-            dialog = Gtk.MessageDialog(self.window,
-                                       0,
-                                       Gtk.MessageType.ERROR,
-                                       Gtk.ButtonsType.OK,
-                                       "MyHDL Error")
-            dialog.format_secondary_text(str(error))
-            dialog.run()
-            dialog.destroy()
+            self.show_error("MyHDL Error", str(error))
             return False
         except _conversion.NoTopException:
-            dialog = Gtk.MessageDialog(self.window,
-                                       0,
-                                       Gtk.MessageType.ERROR,
-                                       Gtk.ButtonsType.OK,
-                                       "Synthia Error: Missing 'top' function")
-            dialog.run()
-            dialog.destroy()
+            self.show_error("Synthia Error: Missing 'top' function")
             return False
         except Exception as error:
-            dialog = Gtk.MessageDialog(self.window,
-                                       0,
-                                       Gtk.MessageType.ERROR,
-                                       Gtk.ButtonsType.OK,
-                                       "Script compilation error")
-            dialog.format_secondary_text(str(error))
-            dialog.run()
-            dialog.destroy()
+            self.show_error("Script compilation error", str(error))
             return False
 
         return True

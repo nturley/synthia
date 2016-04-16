@@ -13,9 +13,9 @@ from myhdl import ConversionError
 # synthesis tools
 import _conversion
 
-
-UI_PATH = join(abspath(dirname(__file__)), 'ui.glade')
-PCF_PATH = join(abspath(dirname(__file__)), 'top.pcf')
+WORKING_DIR = abspath(dirname(__file__))
+UI_PATH = join(WORKING_DIR, 'ui.glade')
+PCF_PATH = join(WORKING_DIR, 'top.pcf')
 DEFAULT_TEXT = '''from myhdl import *
 
 def top(pins):
@@ -26,6 +26,7 @@ def top(pins):
 
 class Synthia(object):
     """ The main application class """
+
     def __init__(self):
         self.docpath = None
         self.message_q = Queue.Queue()
@@ -43,12 +44,12 @@ class Synthia(object):
             "on_deploy_clicked": self.deployclicked,
             "on_newBtn_activate": self.newbuttonclicked,
             "on_openBtn_activate": self.openbuttonclicked,
-            "on_saveasBtn_activate" : self.saveasbuttonclicked,
-            "on_saveBtn_activate" : self.savebuttonclicked,
-            "on_cutBtn_activate" : self.cutbuttonclicked,
-            "on_copyBtn_activate" : self.copybuttonclicked,
-            "on_pasteBtn_activate" : self.pastebuttonclicked,
-            "quit" : Gtk.main_quit
+            "on_saveasBtn_activate": self.saveasbuttonclicked,
+            "on_saveBtn_activate": self.savebuttonclicked,
+            "on_cutBtn_activate": self.cutbuttonclicked,
+            "on_copyBtn_activate": self.copybuttonclicked,
+            "on_pasteBtn_activate": self.pastebuttonclicked,
+            "quit": Gtk.main_quit
         }
         builder.connect_signals(handlers)
         lang = GtkSource.LanguageManager.get_default().get_language('python')
@@ -188,7 +189,7 @@ class Synthia(object):
         print '********************************************'
         subprocess.call('yosys -q -p "synth_ice40 -blif /tmp/top.blif" /tmp/top.v', shell=True)
         print '********************************************'
-        
+
         self.message_q.put("Placing and Routing...")
         print 'arachne-pnr...'
         print '********************************************'
@@ -234,13 +235,23 @@ class Synthia(object):
                                        0,
                                        Gtk.MessageType.ERROR,
                                        Gtk.ButtonsType.OK,
-                                       "Synthia Error")
-            dialog.format_secondary_text('Compiled file must have a "top" function')
+                                       "Synthia Error: Missing 'top' function")
+            dialog.run()
+            dialog.destroy()
+            return False
+        except Exception as error:
+            dialog = Gtk.MessageDialog(self.window,
+                                       0,
+                                       Gtk.MessageType.ERROR,
+                                       Gtk.ButtonsType.OK,
+                                       "Script compilation error")
+            dialog.format_secondary_text(str(error))
             dialog.run()
             dialog.destroy()
             return False
 
         return True
+
 
 if __name__ == '__main__':
     gui = Synthia()
